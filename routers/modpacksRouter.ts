@@ -25,7 +25,7 @@ fs.ensureDirSync(modpacksPath);
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     let destinationPath = uploadsPath;
-    if (file.fieldname.startsWith('screenshotsFiles')) {
+    if (file.fieldname.startsWith('screenshot')) {
       destinationPath = screenshotsPath;
     } else if (file.fieldname.startsWith('thumbnail')) {
       destinationPath = thumbnailsPath;
@@ -51,6 +51,33 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching mod packs:', error);
     res.status(500).json({ error: 'Error fetching mod packs', detail: error });
+  }
+});
+
+router.get('/screenshots', async (req: Request, res: Response) => {
+  try {
+    const files = await fs.readdir(screenshotsPath);
+    const imageFiles = files.filter(file => /\.(png|jpe?g|webp|gif)(-\d+)?$/i.test(file));
+    res.status(200).json({ screenshots: imageFiles });
+  } catch (err) {
+    console.error('Error reading screenshots directory:', err);
+    res.status(500).json({ message: 'Failed to read screenshots' });
+  }
+});
+
+router.delete('/screenshots/:filename', authenticateApiKey, async (req: Request, res: Response) => {
+  const filename = req.params.filename;
+  try {
+    const filePath = path.join(screenshotsPath, filename);
+    if (await fs.pathExists(filePath)) {
+      await fs.remove(filePath);
+      res.status(200).json({ message: 'Screenshot deleted successfully' });
+    } else {
+      res.status(404).json({ message: 'Screenshot not found' });
+    }
+  } catch (error) {
+    console.error('Error deleting screenshot:', error);
+    res.status(500).json({ message: 'Error deleting screenshot', error });
   }
 });
 
@@ -229,17 +256,17 @@ router.post('/upload-zip', upload.single('chunk'), authenticateApiKey, async (re
   }
 });
 
-// New generic upload route for thumbnailFile, screenshotFile, backgroundFile
 router.post('/upload', authenticateApiKey, upload.any(), async (req: Request, res: Response) => {
-  const file = req.file;
-
-  // Determine destination based on fieldname
-  let destinationDir: string | null = null;
+  const files = req.files as Express.Multer.File[] | undefined;
+  const file = files?.[0];
 
   if (!file) {
+    res.status(400).json({ message: 'No file uploaded' });
     return;
   }
-  
+
+  let destinationDir: string | null = null;
+
   switch (file.fieldname) {
     case 'thumbnailFile':
       destinationDir = thumbnailsPath;
@@ -251,24 +278,29 @@ router.post('/upload', authenticateApiKey, upload.any(), async (req: Request, re
       destinationDir = backgroundsPath;
       break;
     default:
-        console.log("Invalid file field name", file.fieldname);
-        res.status(400).json({ message: 'Invalid file field name' });
-        return;
+      console.log('Invalid file field name:', file.fieldname);
+      res.status(400).json({ message: 'Invalid file field name' });
+      return;
   }
 
   try {
     await fs.ensureDir(destinationDir);
     const destPath = path.join(destinationDir, file.originalname);
 
-    // Move file from multer tmp location to correct dir
-    await fs.move(file.path, destPath, { overwrite: true });
+    // Only move file if source and destination are different
+    if (path.resolve(file.path) !== path.resolve(destPath)) {
+      await fs.move(file.path, destPath, { overwrite: true });
+    } else {
+      console.warn('Skipping move: source and destination are the same:', file.path);
+    }
 
     res.status(200).json({ message: 'File uploaded successfully', filename: file.originalname });
   } catch (error) {
     console.error('Error moving uploaded file:', error);
-    res.status(500).json({ message: 'Error saving uploaded file', error: error});
+    res.status(500).json({ message: 'Error saving uploaded file', error });
   }
 });
+
 
 
 export default router;

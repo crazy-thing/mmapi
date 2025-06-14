@@ -28,6 +28,7 @@ const connectToDatabase = async (callback: () => void): Promise<void> => {
 const app = express();
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const API_URL = process.env.API_URL || '/api';
+const screenshotsPath = path.join(process.cwd(), '/uploads/screenshots');
 
 app.use(bodyParser.json({ limit: '10000mb' }));
 app.use(bodyParser.urlencoded({ limit: '10000mb', extended: true }));
@@ -61,7 +62,9 @@ app.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
 }, express.static('uploads'));
 
 connectToDatabase(() => {
-  app.use(express.static('build'));
+  app.use(express.static('dist'));
+  app.use('/screenshots', express.static(screenshotsPath));
+
 
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
