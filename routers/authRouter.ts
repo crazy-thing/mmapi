@@ -21,4 +21,5 @@ authRouter.post('/authenticate', (req: Request, res: Response) => {
   res.status(200).json({ message: 'API key authenticated successfully' });
 });
 
+
 export default authRouter;

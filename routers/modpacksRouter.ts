@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs-extra';
 import Modpack from '../models/modpacks.js';
+import Username from '../models/usernames.js';
 import { deleteFiles } from '../helpers/deleteFiles.js';
 import { authenticateApiKey } from '../middleware/authApiKey.js';
 import logger from '../middleware/logger.js';
@@ -298,6 +299,79 @@ router.post('/upload', authenticateApiKey, upload.any(), async (req: Request, re
   } catch (error) {
     console.error('Error moving uploaded file:', error);
     res.status(500).json({ message: 'Error saving uploaded file', error });
+  }
+});
+
+router.post('/register', authenticateApiKey, async (req: Request, res: Response) => {
+  const { username } = req.body;
+
+  if (!username || typeof username !== 'string' || !username.trim()) {
+    res.status(400).json({ message: 'Username is required and must be a non-empty string' });
+    return;
+  }
+
+  try {
+    const existing = await Username.findOne({ username: username.trim() });
+    if (existing) {
+      res.status(409).json({ message: 'Username already exists' });
+      return;
+    }
+
+    const newUser = new Username({ username: username.trim() });
+    await newUser.save();
+
+    res.status(201).json({ message: 'Username registered successfully', username: newUser.username });
+  } catch (error) {
+    console.error('Error registering username:', error);
+    res.status(500).json({ message: 'Error registering username', error });
+  }
+});
+
+router.get('/usernames', async (req: Request, res: Response) => {
+  try {
+    const usernames = await Username.find();
+    res.status(200).json({ usernames: usernames.map(u => u.username) });
+  } catch (error) {
+    console.error('Error fetching usernames:', error);
+    res.status(500).json({ message: 'Error fetching usernames', error });
+  }
+});
+
+router.post('/check-username', async (req: Request, res: Response) => {
+  const { username } = req.body;
+  if (!username || typeof username !== 'string' || !username.trim()) {
+    res.status(400).json({ message: 'Username is required and must be a non-empty string' });
+    return;
+  }
+  try {
+    const existing = await Username.findOne({ username: username.trim() });
+    if (existing) {
+      res.status(200).json(true);
+    } else {
+      res.status(200).json(false);
+    }
+  } catch (error) {
+    console.error('Error checking username:', error);
+    res.status(500).json({ message: 'Error checking username', error });
+  }
+});
+
+router.post('/delete-username', authenticateApiKey, async (req: Request, res: Response) => {
+  const { username } = req.body;
+  if (!username || typeof username !== 'string' || !username.trim()) {
+    res.status(400).json({ message: 'Username is required and must be a non-empty string' });
+    return;
+  }
+  try {
+    const result = await Username.deleteOne({ username: username.trim() });
+    if (result.deletedCount === 0) {
+      res.status(404).json({ message: 'Username not found' });
+    } else {
+      res.status(200).json({ message: 'Username deleted successfully' });
+    }
+  } catch (error) {
+    console.error('Error deleting username:', error);
+    res.status(500).json({ message: 'Error deleting username', error });
   }
 });
 
